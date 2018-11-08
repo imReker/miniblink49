@@ -66,11 +66,11 @@ void WebFrameClientImpl::didAddMessageToConsole(const WebConsoleMessage& message
     const WebString& sourceName, unsigned sourceLine, const WebString& stackTrace)
 {
 //     WTF::String outstr(L"console:");
-// 
+//
 //     outstr.append((WTF::String)(message.text));
 //     outstr.append(L" ;sourceName:");
 //     outstr.append(sourceName);
-// 
+//
 //     outstr.append(L" ;sourceLine:");
 //     outstr.append(String::number(sourceLine));
 //     outstr.append(L" \n");
@@ -174,7 +174,7 @@ blink::WebPlugin* WebFrameClientImpl::createPlugin(WebLocalFrame* frame, const W
     }
 
     newParam.attributeNames = WebVector<WebString>(paramNames);
-    newParam.attributeValues = WebVector<WebString>(paramValues);  
+    newParam.attributeValues = WebVector<WebString>(paramValues);
 
     PassRefPtr<WebPluginImpl> plugin = adoptRef(new WebPluginImpl(frame, newParam));
     plugin->setParentPlatformPluginWidget(m_webPage->getHWND());
@@ -267,7 +267,7 @@ void WebFrameClientImpl::didStartLoading(bool toDifferentDocument)
     if (handler.otherLoadCallback && m_webPage->getState() == pageInited) {
         wkeTempCallbackInfo* tempInfo = wkeGetTempCallbackInfo(m_webPage->wkeWebView());
         tempInfo->size = sizeof(wkeTempCallbackInfo);
-        tempInfo->frame = nullptr;
+        //tempInfo->frame = nullptr;
         handler.otherLoadCallback(m_webPage->wkeWebView(), handler.otherLoadCallbackParam,
             WKE_DID_START_LOADING, tempInfo);
     }
@@ -277,6 +277,18 @@ void WebFrameClientImpl::didStartLoading(bool toDifferentDocument)
 void WebFrameClientImpl::didStopLoading()
 {
     onLoadingStateChange(false, true);
+#if (defined ENABLE_WKE) && (ENABLE_WKE == 1)
+	wke::AutoDisableFreeV8TempObejct autoDisableFreeV8TempObejct;
+	wke::CWebViewHandler& handler = m_webPage->wkeHandler();
+	if (handler.otherLoadCallback && m_webPage->getState() == pageInited)
+	{
+		wkeTempCallbackInfo* tempInfo = wkeGetTempCallbackInfo(m_webPage->wkeWebView());
+		tempInfo->size = sizeof(wkeTempCallbackInfo);
+		//tempInfo->frame = nullptr;
+		handler.otherLoadCallback(m_webPage->wkeWebView(), handler.otherLoadCallbackParam,
+			WKE_DID_STOP_LOADING, tempInfo);
+	}
+#endif
 }
 
 void WebFrameClientImpl::didChangeLoadProgress(double loadProgress)
@@ -321,7 +333,7 @@ void WebFrameClientImpl::didFailProvisionalLoad(WebLocalFrame* frame, const WebU
         String failedReasonStr = String::format("error reason: %d, ", error.reason);
         failedReasonStr.append(error.localizedDescription);
         wke::CString failedReason(failedReasonStr);
-        wke::CString url(error.unreachableURL.string());
+        wke::CString url(error.domain);
 
         if (error.isCancellation)
             result = WKE_LOADING_CANCELED;
@@ -370,7 +382,7 @@ void WebFrameClientImpl::didCommitProvisionalLoad(WebLocalFrame* frame, const We
         handler.otherLoadCallback(m_webPage->wkeWebView(), handler.otherLoadCallbackParam,
             WKE_DID_NAVIGATE, tempInfo);
     }
-#endif    
+#endif
 }
 
 void WebFrameClientImpl::didCreateNewDocument(WebLocalFrame* frame)
@@ -442,7 +454,7 @@ void WebFrameClientImpl::didFailLoad(WebLocalFrame* frame, const WebURLError& er
         String failedReasonStr = String::format("error reason: %d, ", error.reason);
         failedReasonStr.append(error.localizedDescription);
         wke::CString failedReason(failedReasonStr);
-        wke::CString url(error.unreachableURL.string());
+        wke::CString url(error.domain);
 
         if (error.isCancellation)
             result = WKE_LOADING_CANCELED;
@@ -481,7 +493,7 @@ void WebFrameClientImpl::didFinishLoad(WebLocalFrame* frame)
 }
 
 void WebFrameClientImpl::didNavigateWithinPage(WebLocalFrame* frame, const WebHistoryItem& history, WebHistoryCommitType type)
-{    
+{
     m_webPage->didCommitProvisionalLoad(frame, history, type, true);
 
 #if (defined ENABLE_WKE) && (ENABLE_WKE == 1)
@@ -506,7 +518,7 @@ void WebFrameClientImpl::didNavigateWithinPage(WebLocalFrame* frame, const WebHi
         handler.otherLoadCallback(m_webPage->wkeWebView(), handler.otherLoadCallbackParam,
             WKE_DID_NAVIGATE_IN_PAGE, tempInfo);
     }
-#endif 
+#endif
 }
 
 void WebFrameClientImpl::didUpdateCurrentHistoryItem(WebLocalFrame*)
@@ -651,7 +663,7 @@ void WebFrameClientImpl::willSendRequest(WebLocalFrame* webFrame, unsigned ident
 //     Page* page = viewImpl->page();
 //     if (!page)
 //         return;
-// 
+//
 //     Settings& setting = page->settings();
 //     headerFieldValue = "GBK"; // setting.defaultTextEncodingName();
 //     headerFieldValue.append(",utf-8;q=0.7,*;q=0.3");
@@ -805,6 +817,8 @@ void WebFrameClientImpl::didCreateScriptContext(WebLocalFrame* frame, v8::Local<
         wke::onCreateGlobalObjectInMainFrame(this, frame, context, extensionGroup, worldId);
     else
         wke::onCreateGlobalObjectInSubFrame(this, frame, context, extensionGroup, worldId);
+
+	wkeRunJsByFrame(m_webPage->wkeWebView(), frameIdToWkeFrame(m_webPage, frame), "navigator.geolocation=Object();navigator.geolocation.getCurrentPosition=function(succ,error) {error({code:1, message:''});}", false);
 
     wke::AutoDisableFreeV8TempObejct autoDisableFreeV8TempObejct;
     if (m_webPage->wkeHandler().didCreateScriptContextCallback && m_webPage->getState() == pageInited)
